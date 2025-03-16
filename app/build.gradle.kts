@@ -40,6 +40,23 @@ android {
 }
 
 dependencies {
+    implementation("androidx.compose.material3:material3:1.3.1") // Material 3 estable
+    implementation("androidx.compose.material:material:1.7.8") // Si necesitas Material 2
+    implementation("androidx.compose.material3:material3-window-size-class:1.3.1") // Opcional para manejo de tamaños de pantalla
+
+    implementation("androidx.compose.foundation:foundation:1.7.8") // Para la base de la UI
+    implementation("androidx.compose.ui:ui-tooling:1.7.8") // Herramientas de previsualización
+    implementation("androidx.compose.runtime:runtime-livedata:1.7.8") // Para LiveData en Compose
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
+
+
+    implementation("androidx.compose.ui:ui:1.7.8") // Última versión estable de Compose
+    implementation("androidx.compose.ui:ui-graphics:1.7.8")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.7.8")
+
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0") // Convierte JSON a objetos
+
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

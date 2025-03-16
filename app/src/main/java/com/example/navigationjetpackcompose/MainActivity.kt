@@ -4,26 +4,33 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.*
+import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
+
+
 
 
 class MainActivity : ComponentActivity() {
@@ -31,124 +38,147 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            ChatScreen()
+            MyScreen()
         }
     }
 }
+
 @Composable
-fun ChatScreen() {
+fun MyScreen() {
     var message by remember { mutableStateOf("") }
+    // Pair(mensaje, esUsuario)
+    val messages = remember { mutableStateListOf<Pair<String, Boolean>>() }
     var response by remember { mutableStateOf("Esperando respuesta...") }
-    var isLoading by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Respuesta: $response", modifier = Modifier.padding(8.dp))
+    Scaffold(
+        topBar = {TopBarComponent("Chat De Leyes")},
+        bottomBar = {
+            BottomAppBar(
+                modifier = Modifier.padding(8.dp),
+                backgroundColor = Color.White
+            ) {
+                MessageInput(
+                    message = message,
+                    onMessageChange = {message = it},
+                    onSendClick = {
+                        if (message.isNotEmpty()) {
+                            messages.add(Pair(message, true))
+                            message = ""
+                            coroutineScope.launch {
+                                response = sendMessageToApi(message).toString()
+                                messages.add(Pair("Respuesta automática", false))
+                            }
+                        }
+                    },
+                    onMicClick = {  }
+                )
+            }
+        }
+    ) { innerPadding ->
+        ChatContent(
+            messages = messages,
+            modifier = Modifier.padding(innerPadding)
+        )
+    }
+}
 
+@Composable
+fun TopBarComponent(title:String){
+    TopAppBar(
+        title = {
+            Text(
+                title,
+                color = Color(0xFF000000)
+            )
+        },
+        backgroundColor = Color(0xFF9B70EE)
+    )
+
+}
+
+@Composable
+fun MessageInput(message: String, onMessageChange: (String) -> Unit,
+    onSendClick: () -> Unit, onMicClick: () -> Unit
+) {
+    Row (
+        modifier = Modifier
+            .fillMaxSize(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         OutlinedTextField(
             value = message,
-            onValueChange = { message = it },
-            label = { Text("Escribe un mensaje") },
+            onValueChange = onMessageChange,
+            label = { Text("Escribe un mensaje...") },
+            textStyle = TextStyle(color = Color.Black),
+            modifier = Modifier
+                .weight(1f)
+                .background(Color.White),
             keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = {
-                if (message.isNotEmpty()) {
-                    isLoading = true
-                    // Enviar mensaje a la API
-                    coroutineScope.launch {
-                        response = sendMessageToApi(message)
-                        isLoading = false
-                    }
-                    message = ""
-                }
-            }),
-            modifier = Modifier.fillMaxWidth()
+            keyboardActions = KeyboardActions(onSend = { onSendClick() })
         )
+        IconButton(onClick = onMicClick) {
+            Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar", tint = Color.Black)
+        }
 
-        // Botón de enviar
-        Button(
-            onClick = {
-                if (message.isNotEmpty()) {
-                    isLoading = true
-                    // Enviar mensaje a la API
-                    coroutineScope.launch {
-                        response = sendMessageToApi(message)
-                        isLoading = false
-                    }
-                    message = ""
-                }
-            },
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        IconButton(onClick = onSendClick) {
+            Icon(imageVector = Icons.Default.Send, contentDescription = "Enviar", tint = Color.Black)
+        }
+    }
+}
+
+@Composable
+fun ChatContent(messages: List<Pair<String, Boolean>>, modifier: Modifier = Modifier) {
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1) // Se mueve al último mensaje
+        }
+    }
+
+
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            state = listState
         ) {
-            Text("Enviar")
+            items(messages.size) { index ->
+                val (message, isUser) = messages[index]
+                MessageBubble(message, isUser)
+            }
         }
 
-        // Indicador de carga
-        if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
+}
+
+@Composable
+fun MessageBubble(text: String, isUser: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(8.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isUser) Color(0xFFDCF8C6) else Color(0xFFECECEC)) // Verde claro para usuario, gris claro para receptor
+                .padding(12.dp)
+        ) {
+            Text(text, color = Color.Black)
         }
     }
 }
 
-suspend fun sendMessageToApi(message: String): String {
-    val client = OkHttpClient()
-    val url = "https://openrouter.ai/api/v1/chat/completions"
-    val mediaType = "application/json".toMediaType()
-
-    val jsonBody = JSONObject().apply {
-        put("model", "deepseek/deepseek-r1-zero:free")
-        put("messages", listOf(
-            JSONObject().apply {
-                put("role", "system")
-                put("content", "Por favor responde en español.")
-            },
-            JSONObject().apply {
-                put("role", "user")
-                put("content", message)
-            }
-        ))
-    }.toString()
-
-    val requestBody = jsonBody.toRequestBody(mediaType)
-    val request = Request.Builder()
-        .url(url)
-        .post(requestBody)
-        .addHeader("Authorization", "Bearer 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")
-        .addHeader("Content-Type", "application/json")
-        .build()
-
-    return try {
-        withContext(Dispatchers.IO) {
-            val response = client.newCall(request).execute()
-
-
-            val responseBody = response.body?.string() ?: return@withContext "Sin respuesta del servidor"
-            println("Respuesta de la API: $responseBody")
-
-            val jsonResponse = JSONObject(responseBody)
-
-
-            if (jsonResponse.has("choices")) {
-                val choicesArray = jsonResponse.optJSONArray("choices")
-                if (choicesArray != null && choicesArray.length() > 0) {
-                    val messageObject = choicesArray.getJSONObject(0).optJSONObject("message")
-                    messageObject?.optString("content", "Respuesta vacía") ?: "Respuesta vacía"
-                } else {
-                    "No se encontraron respuestas en la API"
-                }
-            } else {
-                // Agregar log si no se encuentran los 'choices'
-                println("No se encontró el campo 'choices' en la respuesta de la API")
-                "Error en la respuesta de la API: No se encontraron 'choices'."
-            }
-        }
-    } catch (e: Exception) {
-        "Error: ${e.message}"
-    }
+fun sendMessageToApi(message:String){
+    
 }
+
+
 
 
 @Preview(showBackground = true)
 @Composable
 fun ChatScreenPreview() {
-
+    MyScreen()
 }
