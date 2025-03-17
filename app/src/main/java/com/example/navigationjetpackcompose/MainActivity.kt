@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -28,8 +29,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-
-
+import android.util.Log
 
 
 
@@ -45,43 +45,68 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MyScreen() {
-    var message by remember { mutableStateOf("") }
-    // Pair(mensaje, esUsuario)
-    val messages = remember { mutableStateListOf<Pair<String, Boolean>>() }
-    var response by remember { mutableStateOf("Esperando respuesta...") }
     val coroutineScope = rememberCoroutineScope()
+    var messages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
+    var userInput  by remember { mutableStateOf("") }
+    val apiKey = "Bearer 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"
+
+    var isThinking by remember { mutableStateOf(false) } // Estado para "pensando"
+    var errorMessage by remember { mutableStateOf<String?>(null) } // Estado para errores
 
     Scaffold(
-        topBar = {TopBarComponent("Chat De Leyes")},
+        topBar = {TopBarComponent("Chat OpenRouter")},
         bottomBar = {
             BottomAppBar(
-                modifier = Modifier.padding(8.dp),
+                modifier = Modifier.padding(bottom = 3.dp)
+                    .heightIn(min = 72.dp),
                 backgroundColor = Color.White
             ) {
                 MessageInput(
-                    message = message,
-                    onMessageChange = {message = it},
+                    message = userInput ,
+                    onMessageChange = {userInput  = it},
                     onSendClick = {
-                        if (message.isNotEmpty()) {
-                            messages.add(Pair(message, true))
-                            message = ""
+                        if (userInput .isNotEmpty()) {
+                            val userMessage = ChatMessage("user", userInput)
+                            messages = messages + userMessage
+                            userInput = ""
+                            isThinking = true  // Activar el estado de "pensando"
+                            errorMessage = null
                             coroutineScope.launch {
-                                response = sendMessageToApi(message).toString()
-                                messages.add(Pair("Respuesta automática", false))
-                            }
+                                try {
+                                    val apiResponse = RetrofitInstance.api.getChatCompletion(
+                                        apiKey,
+                                        ChatRequest(messages = messages)
+                                    )
+
+                                    Log.d("API_RESPONSE", "Respuesta recibida: ${apiResponse.choices.firstOrNull()?.message}")
+
+                                    val botMessage = apiResponse.choices.first().message.content
+                                    messages = messages + ChatMessage("bot", botMessage)
+                                } catch (e: Exception) {
+                                    Log.e("API_ERROR", "Error al obtener la respuesta del bot: ${e.localizedMessage}", e)
+                                    errorMessage = "Hubo un error al obtener la respuesta del bot."
+                                } finally {
+                                    isThinking = false  // Desactivar el estado de "pensando"
+                                }}
+
                         }
                     },
-                    onMicClick = {  }
+                    onMicClick = {
+
+                    }
                 )
             }
         }
     ) { innerPadding ->
         ChatContent(
             messages = messages,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            isThinking = isThinking,
+            errorMessage = errorMessage
         )
     }
 }
+
 
 @Composable
 fun TopBarComponent(title:String){
@@ -103,20 +128,24 @@ fun MessageInput(message: String, onMessageChange: (String) -> Unit,
 ) {
     Row (
         modifier = Modifier
-            .fillMaxSize(),
+            .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        OutlinedTextField(
-            value = message,
-            onValueChange = onMessageChange,
-            label = { Text("Escribe un mensaje...") },
-            textStyle = TextStyle(color = Color.Black),
-            modifier = Modifier
-                .weight(1f)
-                .background(Color.White),
-            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { onSendClick() })
-        )
+            OutlinedTextField(
+                value = message,
+                onValueChange = onMessageChange,
+                label = { Text("Escribe un mensaje...") },
+                textStyle = TextStyle(color = Color.Black),
+                modifier = Modifier
+
+                    .background(Color.White),
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { onSendClick() }),
+                singleLine = false,  // Permite múltiples líneas
+                maxLines = 3,  // Limita el número máximo de filas
+                minLines = 1,  // Mínimo 1 fila visible
+            )
+
         IconButton(onClick = onMicClick) {
             Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar", tint = Color.Black)
         }
@@ -128,7 +157,12 @@ fun MessageInput(message: String, onMessageChange: (String) -> Unit,
 }
 
 @Composable
-fun ChatContent(messages: List<Pair<String, Boolean>>, modifier: Modifier = Modifier) {
+fun ChatContent(
+    messages: List<ChatMessage>,
+    modifier: Modifier = Modifier,
+    isThinking: Boolean,
+    errorMessage: String?
+) {
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) {
@@ -144,9 +178,22 @@ fun ChatContent(messages: List<Pair<String, Boolean>>, modifier: Modifier = Modi
                 .padding(8.dp),
             state = listState
         ) {
-            items(messages.size) { index ->
-                val (message, isUser) = messages[index]
-                MessageBubble(message, isUser)
+            itemsIndexed(messages) { index, message ->
+                MessageBubble(message.content, message.role == "user")
+            }
+
+            // Si está pensando, muestra una burbuja de "Pensando..."
+            if (isThinking) {
+                item {
+                    MessageBubble("Pensando...", isUser = false)
+                }
+            }
+
+            // Si hubo un error, muestra un mensaje de error
+            if (errorMessage != null) {
+                item {
+                    MessageBubble(errorMessage, isUser = false)
+                }
             }
         }
 
@@ -168,10 +215,6 @@ fun MessageBubble(text: String, isUser: Boolean) {
             Text(text, color = Color.Black)
         }
     }
-}
-
-fun sendMessageToApi(message:String){
-    
 }
 
 
