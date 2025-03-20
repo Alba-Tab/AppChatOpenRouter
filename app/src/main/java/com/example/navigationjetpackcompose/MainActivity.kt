@@ -1,6 +1,9 @@
 package com.example.navigationjetpackcompose
 
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.speech.SpeechRecognizer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -30,8 +33,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import android.util.Log
-
-
+import androidx.compose.ui.platform.LocalContext
+import android.speech.RecognizerIntent
+import android.speech.RecognitionListener
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.app.Activity
+import androidx.core.app.ActivityCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,6 +60,48 @@ fun MyScreen() {
 
     var isThinking by remember { mutableStateOf(false) } // Estado para "pensando"
     var errorMessage by remember { mutableStateOf<String?>(null) } // Estado para errores
+
+
+    val context = LocalContext.current
+
+
+    val activity = context as? Activity
+
+    val speechRecognizer = remember {
+        SpeechRecognizer.createSpeechRecognizer(context)
+    }
+
+    val speechIntent = remember {
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES") // Cambia a tu idioma si es necesario
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)  // Habilita resultados parciales
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1) // Un solo resultado
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName) // Asigna el paquete
+        }
+    }
+
+
+    speechRecognizer.setRecognitionListener(object : RecognitionListener {
+        override fun onResults(results: Bundle?) {
+            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            if (!matches.isNullOrEmpty()) {
+                userInput = matches[0]  // Se asigna el texto reconocido al input
+            }
+        }
+
+        override fun onError(error: Int) {
+            Log.e("SpeechRecognizer", "Error al reconocer voz: $error")
+        }
+
+        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() {}
+        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+    })
 
     Scaffold(
         topBar = {TopBarComponent("Chat OpenRouter")},
@@ -92,7 +142,19 @@ fun MyScreen() {
                         }
                     },
                     onMicClick = {
-
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                            != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            activity?.let {
+                                ActivityCompat.requestPermissions(
+                                    it,
+                                    arrayOf(Manifest.permission.RECORD_AUDIO),
+                                    1
+                                )
+                            }
+                        } else {
+                            speechRecognizer.startListening(speechIntent)
+                        }
                     }
                 )
             }
