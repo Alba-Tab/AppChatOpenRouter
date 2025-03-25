@@ -12,7 +12,7 @@ data class ChatMessage(
 data class ChatRequest(
     val model: String = "deepseek/deepseek-r1-zero:free",
     val messages: List<ChatMessage>,
-    val stream: Boolean = false
+    val stream: Boolean = true
 )
 
 // Modelo de respuesta

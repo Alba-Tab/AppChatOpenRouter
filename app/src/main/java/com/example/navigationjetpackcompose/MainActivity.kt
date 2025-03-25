@@ -56,7 +56,7 @@ fun MyScreen() {
     val coroutineScope = rememberCoroutineScope()
     var messages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var userInput  by remember { mutableStateOf("") }
-    val apiKey = "Bearer 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"
+    val apiKey = "Bearer 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"
 
     var isThinking by remember { mutableStateOf(false) } // Estado para "pensando"
     var errorMessage by remember { mutableStateOf<String?>(null) } // Estado para errores
@@ -67,11 +67,14 @@ fun MyScreen() {
 
     val activity = context as? Activity
 
+
     val speechRecognizer = remember {
+        //Creo una instancia de reconocimiento de voz
         SpeechRecognizer.createSpeechRecognizer(context)
     }
 
     val speechIntent = remember {
+        //Activa el reconocimiento de voz
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES") // Cambia a tu idioma si es necesario
@@ -86,7 +89,7 @@ fun MyScreen() {
         override fun onResults(results: Bundle?) {
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             if (!matches.isNullOrEmpty()) {
-                userInput = matches[0]  // Se asigna el texto reconocido al input
+                userInput = userInput + matches[0]  // Se asigna el texto reconocido al input
             }
         }
 
@@ -206,6 +209,7 @@ fun MessageInput(message: String, onMessageChange: (String) -> Unit,
                 singleLine = false,  // Permite múltiples líneas
                 maxLines = 3,  // Limita el número máximo de filas
                 minLines = 1,  // Mínimo 1 fila visible
+
             )
 
         IconButton(onClick = onMicClick) {
